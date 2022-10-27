@@ -12,7 +12,7 @@
 #define a2 1.4
 #define N1 8
 #define N2 8
-#define phi0 0.80
+#define phi0 0.50
 #define dtbd 0.01
 #define dim 2
 #define polydispersity 0.0
@@ -76,7 +76,7 @@ void calc_force(int (*list)[N1+N2],double (*x)[dim],double (*f)[dim],double (*fi
   for(i=0;i<N1+N2;i++){
     for(j=0;j<i;j++){
 
-        dx=x[i][0]-x[j][0];
+        dx=x[i][0]-x[j][0];   // tagged particle is i
         dy=x[i][1]-x[j][1];
         dx-=L*floor((dx+0.5*L)/L);  // boundary condition
         dy-=L*floor((dy+0.5*L)/L);
@@ -103,11 +103,16 @@ void calc_force(int (*list)[N1+N2],double (*x)[dim],double (*f)[dim],double (*fi
   
 
   // evaluate power
-    if(-dUr>*Fmax){
-      *Fmax=-dUr;
+  for(i=0;i<N1+N2;i++){
+    F=sqrt(f[i][0]*f[i][0]+f[i][1]*f[i][1]);
+    std::cout<<i<<"\t"<<F<<"\n";
+    if(F>*Fmax){
+      *Fmax=F;
     }
+    std::cout<<"Fmax is"<<"\t"<<*Fmax<<"\n";
+  }
 
-  std::cout << *Fmax << "\t" << drmin << "\t" << amin << "\t" << overlap << "\t" <<  *U << "\t" << *P << "\n";  // cout
+  //std::cout << *Fmax << "\t" << drmin << "\t" << amin << "\t" << overlap << "\t" <<  *U << "\t" << *P << "\n";  // cout
 }
 
 void eom_underdamp(int (*list)[N1+N2],double (*v)[dim],double (*x)[dim],double (*f)[dim],double (*fij)[dim],double *a,double *U,double *P,double *Fmax,double dt,double L){
