@@ -76,7 +76,7 @@ void calc_force(int (*list)[N1+N2],double (*x)[dim],double (*f)[dim],double (*fi
   for(i=0;i<N1+N2;i++){
     for(j=0;j<i;j++){
 
-        dx=x[i][0]-x[j][0];   // tagged particle is i
+        dx=x[i][0]-x[j][0];
         dy=x[i][1]-x[j][1];
         dx-=L*floor((dx+0.5*L)/L);  // boundary condition
         dy-=L*floor((dy+0.5*L)/L);
