@@ -11,9 +11,9 @@
 
 #define a1 1.0
 #define a2 1.4
-#define N1 8
-#define N2 8
-#define phi0 0.82
+#define N1 162
+#define N2 162
+#define phi0 0.80
 #define phi_max 0.86
 #define dphi_a 2.0e-3
 #define dphi_g 1.0e-4
