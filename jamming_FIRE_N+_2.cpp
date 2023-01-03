@@ -84,17 +84,15 @@ void list_verlet(int (*list)[N1+N2],double (*x)[dim],double L){
   }
   
   for(i=0;i<N1+N2;i++){
-    for(j=0;j<N1+N2;j++){
-      if(i!=j){
-        dx=x[i][0]-x[j][0];
-        dy=x[i][1]-x[j][1];
-        dx-=L*floor((dx+0.5*L)/L);
-        dy-=L*floor((dy+0.5*L)/L);
-        dr2=dx*dx+dy*dy;
-        if(dr2<skin*skin){
-          list[i][0]++;
-          list[i][(int)list[i][0]]=j;
-        }
+    for(j=0;j<i;j++){
+      dx=x[i][0]-x[j][0];
+      dy=x[i][1]-x[j][1];
+      dx-=L*floor((dx+0.5*L)/L);
+      dy-=L*floor((dy+0.5*L)/L);
+      dr2=dx*dx+dy*dy;
+      if(dr2<skin*skin){
+        list[i][0]++;
+        list[i][(int)list[i][0]]=j;
       }
     }
   }
@@ -136,12 +134,11 @@ void auto_list_update(double *disp_max,double (*x)[dim],double (*x_update)[dim],
 } 
 
 void calc_force(int (*list)[N1+N2],double (*x)[dim],double (*f)[dim],double *a,double *U,double *p,double L){
-  double dx,dy,dr,dr2,dUr,aij,overlap;
+  double dx,dy,dr,dr2,dUr,aij;
   int i,j;
 
   *U=0.0;
   *p=0.0;
-  overlap=0.0;
   ini_array(f);
   
   // calculate force
@@ -160,13 +157,8 @@ void calc_force(int (*list)[N1+N2],double (*x)[dim],double (*f)[dim],double *a,d
         f[list[i][j]][0]+=dUr*dx/dr;
         f[i][1]-=dUr*dy/dr;
         f[list[i][j]][1]+=dUr*dy/dr;
-        if(aij-dr>overlap){
-          overlap=aij-dr;
-        }
-        if(i<list[i][j]){
-          *U+=(1.0-dr/aij)*(1.0-dr/aij)/2.0/(double)(N1+N2);  // alpha=2 at Hertzian potential
-          *p-=dr*dUr/(2.0*L*L);
-        }
+        *U+=(1.0-dr/aij)*(1.0-dr/aij)/2.0/(double)(N1+N2);  // alpha=2 at Hertzian potential
+        *p-=dr*dUr/(2.0*L*L);
       }
     }
   }
@@ -233,7 +225,6 @@ void FIRE(int (*list)[N1+N2],double (*x)[dim],double (*x_update)[dim],double (*f
       dt*=0.5;
       A=0.1;
     }
-
   }
 }
 
@@ -301,6 +292,7 @@ int main(){
 
   while(p<1.0e-9){
     training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,dphi_a,&disp_max,&L);
+    //std::cout<<"phi="<<phi<<"\t"<<"p="<<p<<std::endl;
   }
   output_criticalpoint(phi-dphi_a);
 
