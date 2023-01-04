@@ -11,12 +11,12 @@
 
 #define a1 1.0
 #define a2 1.4
-#define N1 512
-#define N2 512
-#define phi0 0.80
-#define phi_max 0.86
+#define N1 64
+#define N2 64
+#define phi0 0.70
+#define phi_max 1.00
 #define dphi_fixed 1.0e-2
-#define dphi_a 2.0e-3
+#define dphi_a 2.0e-4
 #define dphi_g 1.0e-5
 #define dt0 0.01
 #define dt_max 0.1
@@ -138,7 +138,7 @@ void auto_list_update(double *disp_max,double (*x)[dim],double (*x_update)[dim],
     *disp_max=0.0;
     count=0;
   }
-} 
+}
 
 void calc_force(int (*list)[N1+N2],double (*x)[dim],double (*f)[dim],double *a,double *U,double *p,double L){
   double dx,dy,dr,dr2,dUr,aij;
@@ -212,7 +212,7 @@ void FIRE(int (*list)[N1+N2],double (*x)[dim],double (*x_update)[dim],double (*f
       }
     }
 
-    // converge criterion
+    // convergence criterion
     if(*f_tot<1.0e-12){
       break;
     }
@@ -232,56 +232,52 @@ void FIRE(int (*list)[N1+N2],double (*x)[dim],double (*x_update)[dim],double (*f
       dt*=0.5;
       A=0.1;
     }
-
   }
 }
 
-void output_coord(double (*x)[dim],double *a,double dphi){
+void output_coord(double (*x)[dim],double *a,double phi){
   char filename[128];
   std::ofstream file;
-  sprintf(filename,"coord_FIRE_many_dphi%1.1e.dat",dphi);
+  sprintf(filename,"coord_FIRE_Ntot%d+_phi%.3f.dat",N1+N2,phi);
   file.open(filename,std::ios::app);
   for(int i=0;i<N1+N2;i++)
     file <<x[i][0]<<"\t"<<x[i][1]<<"\t"<<a[i]<<std::endl;
   file.close();
 }
 
-void output_phiJ(double phi_J){
+void output_potential(double U,double phi){
   char filename[128];
   std::ofstream file;
-  sprintf(filename,"phiJ_FIRE_many.dat");
+  sprintf(filename,"potential_FIRE_Ntot%d+.dat",N1+N2);
   file.open(filename,std::ios::app);
-  file << phi_J << std::endl;
+  file << phi << "\t" << U << std::endl;
   file.close();
 }
 
-void output_potential(double U,double dphi){
+void output_pressure(double p,double phi){
   char filename[128];
   std::ofstream file;
-  sprintf(filename,"potential_FIRE_many.dat");
+  sprintf(filename,"pressure_FIRE_Ntot%d+.dat",N1+N2);
   file.open(filename,std::ios::app);
-  file << dphi << "\t" << U << std::endl;
+  file << phi << "\t" << p << std::endl;
   file.close();
 }
 
-void output_pressure(double p,double dphi){
+void output_criticalpoint(double phi){
   char filename[128];
   std::ofstream file;
-  sprintf(filename,"pressure_FIRE_many.dat");
+  sprintf(filename,"criticalpoint_FIRE_Ntot%d+.dat",N1+N2);
   file.open(filename,std::ios::app);
-  file << dphi << "\t" << p << std::endl;
+  file << phi << std::endl;
   file.close();
 }
 
-void initialize(int (*list)[N1+N2],double (*x)[dim],double (*f)[dim],double *a,double *U,double *p,double *phi,double *dphi,double *disp_max,double *L){
+void initialize(int (*list)[N1+N2],double (*x)[dim],double (*f)[dim],double *a,double *U,double *p,double *phi,double L){
   *phi=phi0;
-  *dphi=0.0;
-  *L=sqrt((N1*a1/2.0*a1/2.0+N2*a2/2.0*a2/2.0)*M_PI/phi0);
-  *disp_max=0.0;
   ini_array(x);
-  ini_coord(x,*L);
-  list_verlet(list,x,*L);
-  calc_force(list,x,f,a,&(*U),&(*p),*L);
+  ini_coord(x,L);
+  list_verlet(list,x,L);
+  calc_force(list,x,f,a,&(*U),&(*p),L);
 }
 
 void training(int (*list)[N1+N2],double (*x)[dim],double (*x_update)[dim],double (*f)[dim],double *a,double *U,double *p,double *f_tot,double *phi,double dphi,double *disp_max,double *L){
@@ -290,81 +286,21 @@ void training(int (*list)[N1+N2],double (*x)[dim],double (*x_update)[dim],double
 }
 
 int main(){
-  double x[N1+N2][dim],x_update[N1+N2][dim],v[N1+N2][dim],f[N1+N2][dim],a[N1+N2],U,p,phi,phi_J,dphi,f_tot;
+  double x[N1+N2][dim],x_update[N1+N2][dim],v[N1+N2][dim],f[N1+N2][dim],a[N1+N2],U,p,phi,phi_J,f_tot;
   double L=sqrt((N1*a1/2.0*a1/2.0+N2*a2/2.0*a2/2.0)*M_PI/phi0),disp_max=0.0;
   char filename[128];
-  int list[N1+N2][N1+N2],i,j=0;
+  int list[N1+N2][N1+N2];
 
   set_diameter(a);
-  initialize(list,x,f,a,&U,&p,&phi,&dphi,&disp_max,&L);
+  initialize(list,x,f,a,&U,&p,&phi,L);
+  FIRE(list,x,x_update,f,a,&U,&p,&disp_max,&f_tot,L);
 
-  //step=1;
-  while(phi<=phi_max){
+  while(p<1.0e-9){
     training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,dphi_a,&disp_max,&L);
-    //output_pressure(p,phi);
+    //std::cout<<"phi="<<phi<<"\t"<<"L="<<L<<std::endl;
   }
-
-  //step=2;
-  while(p>1.0e-3){
-    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,-dphi_a*5.0e-1,&disp_max,&L);
-    //output_pressure(p,phi);
-  }
-  while(p>1.0e-4){
-    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,-dphi_a*5.0e-2,&disp_max,&L);
-    //output_pressure(p,phi);
-  }
-  while(p>1.0e-5){
-    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,-dphi_a*5.0e-3,&disp_max,&L);
-    //output_pressure(p,phi);
-  }
-  while(p>1.0e-6){
-    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,-dphi_a*5.0e-4,&disp_max,&L);
-    //output_pressure(p,phi);
-  }
-  while(p>1.0e-7){
-    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,-dphi_a*5.0e-5,&disp_max,&L);
-    //output_pressure(p,phi);
-  }
-  while(p>1.0e-8){
-    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,-dphi_a*5.0e-6,&disp_max,&L);
-    //output_pressure(p,phi);
-  }
-  while(p>1.0e-9){
-    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,-dphi_a*5.0e-7,&disp_max,&L);
-    //output_pressure(p,phi);
-  }
-  phi_J=phi;
-  output_phiJ(phi_J);
-
-  //step=3;
-  for(i=0;i<10;i++){  //-6 <= log{10}(phi-phi_J) <= -5
-    dphi+=dphi_a*5.0e-4;
-    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,dphi_a*5.0e-4,&disp_max,&L);
-    
-    output_coord(x,a,dphi);
-    output_pressure(p,dphi);
-  }
-  for(i=0;i<9;i++){  //-5 <= log{10}(phi-phi_J) <= -4
-    dphi+=dphi_a*5.0e-3;
-    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,dphi_a*5.0e-3,&disp_max,&L);
-    
-    output_coord(x,a,dphi);
-    output_pressure(p,dphi);
-  }
-  for(i=0;i<9;i++){  //-4 <= log{10}(phi-phi_J) <= -3
-    dphi+=dphi_a*5.0e-2;
-    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,dphi_a*5.0e-2,&disp_max,&L);
-    
-    output_coord(x,a,dphi);
-    output_pressure(p,dphi);
-  }
-  for(i=0;i<9;i++){  //-3 <= log{10}(phi-phi_J) <= -2
-    dphi+=dphi_a*5.0e-1;
-    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,dphi_a*5.0e-1,&disp_max,&L);
-    
-    output_coord(x,a,dphi);
-    output_pressure(p,dphi);
-  }  
+  //output_coord(x,a,phi);
+  output_criticalpoint(phi);
 
   return 0;
 }

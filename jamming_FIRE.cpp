@@ -11,8 +11,8 @@
 
 #define a1 1.0
 #define a2 1.4
-#define N1 512
-#define N2 512
+#define N1 162
+#define N2 162
 #define phi0 0.80
 #define phi_max 0.86
 #define dphi_fixed 1.0e-2
@@ -27,7 +27,7 @@
 #define skin 1.0
 
 void ini_coord(double (*x)[dim],double L){
-  srand((unsigned int)time(NULL));
+  //srand((unsigned int)time(NULL));
   for(int i=0;i<N1+N2;i++){
     x[i][0] = (double)rand()/RAND_MAX*L;
     x[i][1] = (double)rand()/RAND_MAX*L;
@@ -91,15 +91,17 @@ void list_verlet(int (*list)[N1+N2],double (*x)[dim],double L){
   }
   
   for(i=0;i<N1+N2;i++){
-    for(j=0;j<i;j++){
-      dx=x[i][0]-x[j][0];
-      dy=x[i][1]-x[j][1];
-      dx-=L*floor((dx+0.5*L)/L);
-      dy-=L*floor((dy+0.5*L)/L);
-      dr2=dx*dx+dy*dy;
-      if(dr2<(cut+skin)*(cut+skin)){
-        list[i][0]++;
-        list[i][(int)list[i][0]]=j;
+    for(j=0;j<N1+N2;j++){
+      if(i!=j){
+        dx=x[i][0]-x[j][0];
+        dy=x[i][1]-x[j][1];
+        dx-=L*floor((dx+0.5*L)/L);
+        dy-=L*floor((dy+0.5*L)/L);
+        dr2=dx*dx+dy*dy;
+        if(dr2<(cut+skin)*(cut+skin)){
+          list[i][0]++;
+          list[i][(int)list[i][0]]=j;
+        }
       }
     }
   }
@@ -141,11 +143,12 @@ void auto_list_update(double *disp_max,double (*x)[dim],double (*x_update)[dim],
 } 
 
 void calc_force(int (*list)[N1+N2],double (*x)[dim],double (*f)[dim],double *a,double *U,double *p,double L){
-  double dx,dy,dr,dr2,dUr,aij;
+  double dx,dy,dr,dr2,dUr,aij,overlap;
   int i,j;
 
   *U=0.0;
   *p=0.0;
+  overlap=0.0;
   ini_array(f);
   
   // calculate force
@@ -164,8 +167,13 @@ void calc_force(int (*list)[N1+N2],double (*x)[dim],double (*f)[dim],double *a,d
         f[list[i][j]][0]+=dUr*dx/dr;
         f[i][1]-=dUr*dy/dr;
         f[list[i][j]][1]+=dUr*dy/dr;
-        *U+=(1.0-dr/aij)*(1.0-dr/aij)/2.0/(double)(N1+N2);  // alpha=2 at Hertzian potential
-        *p-=dr*dUr/(2.0*L*L);
+        if(aij-dr>overlap){
+          overlap=aij-dr;
+        }
+        if(i<list[i][j]){
+          *U+=(1.0-dr/aij)*(1.0-dr/aij)/2.0/(double)(N1+N2);  // alpha=2 at Hertzian potential
+          *p-=dr*dUr/(2.0*L*L);
+        }
       }
     }
   }
@@ -175,7 +183,7 @@ void FIRE(int (*list)[N1+N2],double (*x)[dim],double (*x_update)[dim],double (*f
   double v[N1+N2][dim],P,v_norm,f_norm;
   double dt=dt0,A=0.1;
   int count=0;
-
+  
   ini_array(v);
   list_verlet(list,x,L);
   calc_force(list,x,f,a,&(*U),&(*p),L);
@@ -236,135 +244,98 @@ void FIRE(int (*list)[N1+N2],double (*x)[dim],double (*x_update)[dim],double (*f
   }
 }
 
-void output_coord(double (*x)[dim],double *a,double dphi){
+void output_coord(int step,double (*x)[dim],double *a,double phi){
   char filename[128];
   std::ofstream file;
-  sprintf(filename,"coord_FIRE_many_dphi%1.1e.dat",dphi);
-  file.open(filename,std::ios::app);
+  sprintf(filename,"coord_FIRE_step%d_phi%.6f.dat",step,phi);
+  file.open(filename);
   for(int i=0;i<N1+N2;i++)
     file <<x[i][0]<<"\t"<<x[i][1]<<"\t"<<a[i]<<std::endl;
   file.close();
 }
 
-void output_phiJ(double phi_J){
+void output_potential(int step,double U,double phi){
   char filename[128];
   std::ofstream file;
-  sprintf(filename,"phiJ_FIRE_many.dat");
+  sprintf(filename,"potential_FIRE_step%d.dat",step);
   file.open(filename,std::ios::app);
-  file << phi_J << std::endl;
+  file << phi << "\t" << U << std::endl;
   file.close();
 }
 
-void output_potential(double U,double dphi){
+void output_pressure(int step,double p,double phi){
   char filename[128];
   std::ofstream file;
-  sprintf(filename,"potential_FIRE_many.dat");
+  sprintf(filename,"pressure_FIRE_step%d.dat",step);
   file.open(filename,std::ios::app);
-  file << dphi << "\t" << U << std::endl;
+  file << phi << "\t" << p << std::endl;
   file.close();
 }
 
-void output_pressure(double p,double dphi){
-  char filename[128];
-  std::ofstream file;
-  sprintf(filename,"pressure_FIRE_many.dat");
-  file.open(filename,std::ios::app);
-  file << dphi << "\t" << p << std::endl;
-  file.close();
-}
-
-void initialize(int (*list)[N1+N2],double (*x)[dim],double (*f)[dim],double *a,double *U,double *p,double *phi,double *dphi,double *disp_max,double *L){
+void initialize(int (*list)[N1+N2],double (*x)[dim],double (*f)[dim],double *a,double *U,double *p,double *phi,double L){
   *phi=phi0;
-  *dphi=0.0;
-  *L=sqrt((N1*a1/2.0*a1/2.0+N2*a2/2.0*a2/2.0)*M_PI/phi0);
-  *disp_max=0.0;
   ini_array(x);
-  ini_coord(x,*L);
-  list_verlet(list,x,*L);
-  calc_force(list,x,f,a,&(*U),&(*p),*L);
+  ini_coord(x,L);
+  list_verlet(list,x,L);
+  calc_force(list,x,f,a,&(*U),&(*p),L);
 }
 
-void training(int (*list)[N1+N2],double (*x)[dim],double (*x_update)[dim],double (*f)[dim],double *a,double *U,double *p,double *f_tot,double *phi,double dphi,double *disp_max,double *L){
+void training(int (*list)[N1+N2],int step,double (*x)[dim],double (*x_update)[dim],double (*f)[dim],double *a,double *U,double *p,double *f_tot,double *phi,double dphi,double *disp_max,double *L){
   affine_transformation(x,&(*L),&(*phi),dphi);
   FIRE(list,x,x_update,f,a,&(*U),&(*p),&(*disp_max),&(*f_tot),*L);
+
+  //output_coord(step,x,a,*phi);
+  output_potential(step,*U,*phi);
+  output_pressure(step,*p,*phi);
 }
 
 int main(){
-  double x[N1+N2][dim],x_update[N1+N2][dim],v[N1+N2][dim],f[N1+N2][dim],a[N1+N2],U,p,phi,phi_J,dphi,f_tot;
+  double x[N1+N2][dim],x_update[N1+N2][dim],v[N1+N2][dim],f[N1+N2][dim],a[N1+N2],U,p,phi,phi_J,f_tot;
   double L=sqrt((N1*a1/2.0*a1/2.0+N2*a2/2.0*a2/2.0)*M_PI/phi0),disp_max=0.0;
   char filename[128];
-  int list[N1+N2][N1+N2],i,j=0;
+  int list[N1+N2][N1+N2],step;
 
   set_diameter(a);
-  initialize(list,x,f,a,&U,&p,&phi,&dphi,&disp_max,&L);
+  initialize(list,x,f,a,&U,&p,&phi,L);
 
-  //step=1;
+  step=1;
   while(phi<=phi_max){
-    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,dphi_a,&disp_max,&L);
-    //output_pressure(p,phi);
+    training(list,step,x,x_update,f,a,&U,&p,&f_tot,&phi,dphi_a,&disp_max,&L);
   }
 
-  //step=2;
+  step=2;
   while(p>1.0e-3){
-    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,-dphi_a*5.0e-1,&disp_max,&L);
-    //output_pressure(p,phi);
+    training(list,step,x,x_update,f,a,&U,&p,&f_tot,&phi,-dphi_a*5.0e-1,&disp_max,&L);
   }
   while(p>1.0e-4){
-    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,-dphi_a*5.0e-2,&disp_max,&L);
-    //output_pressure(p,phi);
+    training(list,step,x,x_update,f,a,&U,&p,&f_tot,&phi,-dphi_a*5.0e-2,&disp_max,&L);
   }
   while(p>1.0e-5){
-    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,-dphi_a*5.0e-3,&disp_max,&L);
-    //output_pressure(p,phi);
+    training(list,step,x,x_update,f,a,&U,&p,&f_tot,&phi,-dphi_a*5.0e-3,&disp_max,&L);
   }
   while(p>1.0e-6){
-    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,-dphi_a*5.0e-4,&disp_max,&L);
-    //output_pressure(p,phi);
+    training(list,step,x,x_update,f,a,&U,&p,&f_tot,&phi,-dphi_a*5.0e-4,&disp_max,&L);
   }
   while(p>1.0e-7){
-    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,-dphi_a*5.0e-5,&disp_max,&L);
-    //output_pressure(p,phi);
+    training(list,step,x,x_update,f,a,&U,&p,&f_tot,&phi,-dphi_a*5.0e-5,&disp_max,&L);
   }
   while(p>1.0e-8){
-    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,-dphi_a*5.0e-6,&disp_max,&L);
-    //output_pressure(p,phi);
+    training(list,step,x,x_update,f,a,&U,&p,&f_tot,&phi,-dphi_a*5.0e-6,&disp_max,&L);
   }
   while(p>1.0e-9){
-    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,-dphi_a*5.0e-7,&disp_max,&L);
-    //output_pressure(p,phi);
+    training(list,step,x,x_update,f,a,&U,&p,&f_tot,&phi,-dphi_a*5.0e-7,&disp_max,&L);
   }
   phi_J=phi;
-  output_phiJ(phi_J);
 
-  //step=3;
-  for(i=0;i<10;i++){  //-6 <= log{10}(phi-phi_J) <= -5
-    dphi+=dphi_a*5.0e-4;
-    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,dphi_a*5.0e-4,&disp_max,&L);
-    
-    output_coord(x,a,dphi);
-    output_pressure(p,dphi);
+  step=3;
+  while(phi<=phi_J+dphi_fixed){
+    affine_geometric(x,&L,&phi);
+    FIRE(list,x,x_update,f,a,&U,&p,&f_tot,&disp_max,L);
+
+    //output_coord(step,x,a,phi);
+    output_potential(step,U,phi);
+    output_pressure(step,p,phi);
   }
-  for(i=0;i<9;i++){  //-5 <= log{10}(phi-phi_J) <= -4
-    dphi+=dphi_a*5.0e-3;
-    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,dphi_a*5.0e-3,&disp_max,&L);
-    
-    output_coord(x,a,dphi);
-    output_pressure(p,dphi);
-  }
-  for(i=0;i<9;i++){  //-4 <= log{10}(phi-phi_J) <= -3
-    dphi+=dphi_a*5.0e-2;
-    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,dphi_a*5.0e-2,&disp_max,&L);
-    
-    output_coord(x,a,dphi);
-    output_pressure(p,dphi);
-  }
-  for(i=0;i<9;i++){  //-3 <= log{10}(phi-phi_J) <= -2
-    dphi+=dphi_a*5.0e-1;
-    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,dphi_a*5.0e-1,&disp_max,&L);
-    
-    output_coord(x,a,dphi);
-    output_pressure(p,dphi);
-  }  
 
   return 0;
 }
