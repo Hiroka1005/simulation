@@ -242,7 +242,7 @@ void output_coord(double (*x)[dim],double *a,double dphi){
   sprintf(filename,"coord_FIRE_many_dphi%1.1e.dat",dphi);
   file.open(filename,std::ios::app);
   for(int i=0;i<N1+N2;i++)
-    file <<x[i][0]<<"\t"<<x[i][1]<<"\t"<<a[i]<<std::endl;
+    file<<std::setprecision(12)<<x[i][0]<<"\t"<<x[i][1]<<"\t"<<a[i]<<std::endl;
   file.close();
 }
 
@@ -251,7 +251,7 @@ void output_phiJ(double phi_J){
   std::ofstream file;
   sprintf(filename,"phiJ_FIRE_many.dat");
   file.open(filename,std::ios::app);
-  file << phi_J << std::endl;
+  file << std::setprecision(12)<< phi_J << std::endl;
   file.close();
 }
 
@@ -269,7 +269,7 @@ void output_pressure(double p,double dphi){
   std::ofstream file;
   sprintf(filename,"pressure_FIRE_many.dat");
   file.open(filename,std::ios::app);
-  file << dphi << "\t" << p << std::endl;
+  file << std::setprecision(12)<< dphi << "\t" << p << std::endl;
   file.close();
 }
 
@@ -333,6 +333,11 @@ int main(){
     training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,-dphi_a*5.0e-7,&disp_max,&L);
     //output_pressure(p,phi);
   }
+  while(p>1.0e-10){
+    training(list,x,x_update,f,a,&U,&p,&f_tot,&phi,-dphi_a*5.0e-8,&disp_max,&L);
+    //output_pressure(p,phi);
+  }
+
   phi_J=phi;
   output_phiJ(phi_J);
 
